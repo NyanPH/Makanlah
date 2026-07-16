@@ -91,7 +91,7 @@ main{padding-bottom:calc(116px + var(--safe-b))}
 }
 .plate .face .sub{font-size:10.5px; color:var(--red); margin-top:6px; font-weight:800; text-transform:uppercase; letter-spacing:2px}
 
-.plate.spinning .face .label{font-size:clamp(14px,4.2vw,18px); color:var(--ink); letter-spacing:.2px}
+.plate.spinning .face .label{font-size:clamp(30px,8vw,38px); line-height:1; letter-spacing:0}
 @keyframes wobble{0%,100%{transform:rotate(-1.6deg)}50%{transform:rotate(1.6deg)}}
 @media (prefers-reduced-motion:reduce){
   .plate.spinning .plate-img{animation:none}
@@ -244,6 +244,33 @@ ol.steps{font-size:13.5px; color:var(--ink-soft); line-height:1.65; padding-left
 .sync-dot.ok{background:var(--green)}
 .sync-dot.err{background:var(--red)}
 
+/* ---------- More lock ---------- */
+.lock-screen{
+  display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+  padding:48px 24px; text-align:center;
+}
+.lock-screen .lock-ic{font-size:44px; margin-bottom:14px}
+.lock-screen h2{font-family:var(--display); font-size:22px; margin-bottom:6px}
+.lock-screen p{font-size:14px; color:var(--ink-soft); line-height:1.5; max-width:300px; margin-bottom:20px}
+.pin-input{
+  width:200px; text-align:center; font-size:26px; letter-spacing:10px;
+  padding:12px 14px; border-radius:14px; border:1.5px solid var(--line);
+  background:var(--white); outline:none;
+}
+.pin-input:focus{border-color:var(--green)}
+.lock-screen .btn{width:200px; margin-top:14px}
+.lock-err{color:var(--red); font-size:13px; font-weight:600; min-height:18px; margin-top:10px}
+
+/* ---------- Token field ---------- */
+.tokrow{display:flex; gap:8px; align-items:stretch}
+.tokrow input{flex:1}
+.tokeye{
+  flex:0 0 auto; width:46px; border:1.5px solid var(--line); border-radius:12px;
+  background:var(--white); font-size:17px; opacity:.75;
+}
+.tokeye:active{opacity:1}
+.tokeye.on{background:var(--turmeric-soft); border-color:var(--turmeric)}
+
 /* ---------- Place suggestions ---------- */
 .suggest-wrap{position:relative}
 .suggest{
@@ -322,6 +349,16 @@ input,textarea{color:var(--ink)}
 
   <!-- SETTINGS -->
   <section class="screen" id="scr-more">
+    <div class="lock-screen" id="moreLock" style="display:none">
+      <div class="lock-ic">🔒</div>
+      <h2 id="lockTitle">Enter PIN</h2>
+      <p id="lockMsg">The More tab is protected.</p>
+      <input class="pin-input" id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="••••" autocomplete="off">
+      <div class="lock-err" id="lockErr"></div>
+      <button class="btn primary" id="pinBtn">Unlock</button>
+      <button class="btn soft" id="pinReset" style="display:none">Forgot PIN?</button>
+    </div>
+    <div id="moreInner">
     <div class="block">
       <h3>The pot so far</h3>
       <div class="stats" id="statsRow"></div>
@@ -354,32 +391,67 @@ input,textarea{color:var(--ink)}
     </div>
 
     <div class="block">
-      <h3><span class="sync-dot" id="syncDot"></span>Auto-sync (optional)</h3>
-      <p class="hint">Keep both phones in sync automatically using a free Google Apps Script — no accounts, no servers to pay for. One-time setup, ~3 minutes.</p>
-      <details>
-        <summary>Show setup steps + script</summary>
-        <ol class="steps">
-          <li>Go to <b>script.google.com</b> → New project</li>
-          <li>Delete the sample code, paste the script below</li>
-          <li>Deploy → New deployment → type: <b>Web app</b></li>
-          <li>Execute as: <b>Me</b> · Who has access: <b>Anyone</b></li>
-          <li>Copy the Web app URL, paste it below on <b>both</b> phones</li>
-        </ol>
-        <div class="codebox" id="gsCode">function doGet(e) {
-  var d = PropertiesService.getScriptProperties()
-    .getProperty('data') || '[]';
-  return ContentService.createTextOutput(d)
-    .setMimeType(ContentService.MimeType.JSON);
+      <h3><span class="sync-dot" id="syncDot"></span>Auto-sync</h3>
+      <p class="hint">Connected, and protected by a secret token. You normally never need to open the settings below.</p>
+      <details id="syncAdvanced">
+        <summary>🔒 Advanced sync settings</summary>
+        <details style="margin-top:10px">
+          <summary>Show setup steps + script</summary>
+          <ol class="steps">
+            <li>Go to <b>script.google.com</b> → New project</li>
+            <li>Delete the sample code, paste the script below</li>
+            <li>Change <b>SECRET</b> to your own long random password</li>
+            <li>Deploy → New deployment → type: <b>Web app</b></li>
+            <li>Execute as: <b>Me</b> · Who has access: <b>Anyone</b></li>
+            <li>Copy the Web app URL + paste it below on <b>both</b> phones</li>
+            <li>Paste the same SECRET into <b>Secret token</b> on both phones</li>
+          </ol>
+          <div class="codebox" id="gsCode">// ==== MakanLah secure sync (with write log) ====
+// 1. Change SECRET to your own long random password.
+// 2. Put the SAME password in the app: More > Secret token.
+var SECRET = 'CHANGE-ME-to-a-long-random-string';
+
+function ok_(o){ return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+function auth_(e){ return e && e.parameter && e.parameter.token === SECRET; }
+
+function doGet(e){
+  if(!auth_(e)) return ok_({error:'unauthorized'});
+  var d = PropertiesService.getScriptProperties().getProperty('data') || '[]';
+  return ContentService.createTextOutput(d).setMimeType(ContentService.MimeType.JSON);
 }
-function doPost(e) {
-  PropertiesService.getScriptProperties()
-    .setProperty('data', e.postData.contents);
-  return ContentService.createTextOutput('ok');
+
+function doPost(e){
+  if(!auth_(e)) return ok_({error:'unauthorized'});
+  var props = PropertiesService.getScriptProperties();
+  var body = e.postData.contents;
+  // --- write log: keep the last 30 writes with a timestamp + item count ---
+  try {
+    var n = -1;
+    try { n = JSON.parse(body).length; } catch (ignore) {}
+    var log = JSON.parse(props.getProperty('writelog') || '[]');
+    log.push({ t: new Date().toISOString(), count: n });
+    if (log.length > 30) log = log.slice(log.length - 30);
+    props.setProperty('writelog', JSON.stringify(log));
+  } catch (ignore) {}
+  props.setProperty('data', body);
+  return ok_({ ok: true });
+}
+
+// Run this manually anytime to see recent writes (View > Logs).
+function showWriteLog(){
+  Logger.log(PropertiesService.getScriptProperties().getProperty('writelog') || 'no writes yet');
 }</div>
-        <button class="btn soft full" id="copyGs">Copy script</button>
+          <button class="btn soft full" id="copyGs">Copy script</button>
+        </details>
+        <div class="field" style="margin-top:10px"><label>Web app URL</label><input id="syncUrl" placeholder="https://script.google.com/macros/s/…/exec"></div>
+        <div class="field"><label>Secret token</label>
+          <div class="tokrow">
+            <input id="syncToken" type="password" placeholder="the SECRET from your script" autocomplete="off">
+            <button type="button" class="tokeye" id="tokEye" aria-label="Show or hide token">👁️</button>
+          </div>
+        </div>
+        <button class="btn primary full" id="syncNow">🔄 Sync now</button>
       </details>
-      <div class="field" style="margin-top:10px"><label>Web app URL</label><input id="syncUrl" placeholder="https://script.google.com/macros/s/…/exec"></div>
-      <button class="btn primary full" id="syncNow">🔄 Sync now</button>
     </div>
 
     <div class="block">
@@ -396,6 +468,7 @@ function doPost(e) {
         <button class="btn soft" id="exportBtn">Copy backup</button>
         <button class="btn soft" id="importBtn">Restore</button>
       </div>
+    </div>
     </div>
   </section>
 </main>
@@ -469,6 +542,9 @@ let places = store.get('ml_places', []);
 let cfg = store.get('ml_cfg', { you:'Me', partner:'Partner', syncUrl:'' });
 if(cfg.hideVisited === undefined) cfg.hideVisited = true;
 if(!cfg.navApp) cfg.navApp = 'apple';
+if(cfg.syncToken === undefined) cfg.syncToken = '';
+if(cfg.morePinHash === undefined) cfg.morePinHash = '';   // '' = no PIN set yet
+let moreUnlocked = false;   // resets to false every fresh app launch
 let spinFilter = { cuisines:new Set(), country:store.get('ml_country',''), prices:new Set(), q:'' };
 let lastPickId = null, editingId = null, spinning = false;
 
@@ -491,6 +567,83 @@ let toastT;
 function toast(msg){
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ================= More-tab PIN lock ================= */
+async function hashPin(pin){
+  const data = new TextEncoder().encode('MakanLah::' + pin);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,'0')).join('');
+}
+function showMoreGate(){
+  const locked = !!cfg.morePinHash && !moreUnlocked;
+  const setup = !cfg.morePinHash;
+  $('moreLock').style.display = (locked || setup) ? 'flex' : 'none';
+  $('moreInner').style.display = (locked || setup) ? 'none' : 'block';
+  $('lockErr').textContent = '';
+  $('pinInput').value = '';
+  // always restore PIN-entry mode — a half-finished "Forgot PIN?" must not leak token mode
+  $('pinInput').type = 'password';
+  $('pinInput').setAttribute('inputmode','numeric');
+  $('pinInput').placeholder = '••••';
+  $('pinInput').maxLength = 8;
+  if(setup){
+    $('lockTitle').textContent = 'Set a PIN';
+    $('lockMsg').textContent = 'Create a PIN to protect the More tab. You and your partner share the same PIN — set it the same on both phones.';
+    $('pinBtn').textContent = 'Set PIN';
+  } else if(locked){
+    $('lockTitle').textContent = 'Enter PIN';
+    $('lockMsg').textContent = 'The More tab is locked.';
+    $('pinBtn').textContent = 'Unlock';
+    setTimeout(() => $('pinInput').focus(), 150);
+  }
+  // reset link only makes sense when a PIN exists AND a sync token is configured
+  $('pinReset').style.display = (locked && cfg.syncToken) ? 'block' : 'none';
+  resetMode = false;
+}
+
+let resetMode = false;
+function startPinReset(){
+  resetMode = true;
+  $('lockTitle').textContent = 'Reset PIN';
+  $('lockMsg').textContent = 'Enter your sync Secret token to confirm it\'s you, then you can set a new PIN.';
+  $('pinInput').type = 'text';
+  $('pinInput').value = '';
+  $('pinInput').setAttribute('inputmode','text');
+  $('pinInput').placeholder = 'secret token';
+  $('pinInput').maxLength = 64;
+  $('pinBtn').textContent = 'Confirm token';
+  $('lockErr').textContent = '';
+  $('pinReset').style.display = 'none';
+  setTimeout(() => $('pinInput').focus(), 100);
+}
+async function submitPin(){
+  // --- reset flow: first confirm the sync token, then fall through to fresh PIN setup ---
+  if(resetMode){
+    const entered = $('pinInput').value.trim();
+    if(entered && entered === cfg.syncToken){
+      cfg.morePinHash = ''; persist(false); moreUnlocked = false;
+      // restore the input to PIN mode for the set-new-PIN step
+      $('pinInput').type = 'password'; $('pinInput').setAttribute('inputmode','numeric');
+      $('pinInput').placeholder = '••••'; $('pinInput').maxLength = 8;
+      showMoreGate();   // morePinHash now '' -> shows the "Set a PIN" setup state
+      toast('Token confirmed — set a new PIN');
+    } else {
+      $('lockErr').textContent = 'Token does not match'; $('pinInput').value = '';
+    }
+    return;
+  }
+  const pin = $('pinInput').value.trim();
+  if(pin.length < 4){ $('lockErr').textContent = 'Use at least 4 digits'; return; }
+  const hash = await hashPin(pin);
+  if(!cfg.morePinHash){
+    cfg.morePinHash = hash; persist(false); moreUnlocked = true;
+    showMoreGate(); renderMore(); toast('PIN set 🔒');
+  } else if(hash === cfg.morePinHash){
+    moreUnlocked = true; showMoreGate(); renderMore();
+  } else {
+    $('lockErr').textContent = 'Wrong PIN'; $('pinInput').value = '';
+  }
 }
 
 /* ================= body scroll lock (iOS scroll-chaining fix) ================= */
@@ -521,7 +674,15 @@ function showScreen(name){
     b.classList.toggle('on', b.dataset.scr === name));
   if(name === 'spin') renderSpin();
   if(name === 'places') renderPlaces();
-  if(name === 'more') renderMore();
+  if(name === 'more'){
+    showMoreGate();
+    if(!cfg.morePinHash || moreUnlocked){
+      renderMore();
+      const adv = $('syncAdvanced'); if(adv) adv.open = false;
+      const tk = $('syncToken'); if(tk) tk.type = 'password';
+      const te = $('tokEye'); if(te) te.classList.remove('on');
+    }
+  }
 }
 
 /* ================= spin screen ================= */
@@ -627,7 +788,7 @@ function spin(){
   plate.classList.add('spinning'); sub.textContent = 'deciding…';
   startPlateSpin();
   const names = ['🍜','🍣','🥘','🍡','🍕','🍔','🌮','🍛','🍝','🥟','🍤','🍢','🍙','🥙','🍗','🍖','🦞','🥗','🍲','🫕','🥮','🍧','🧋','☕'];
-  let i = 0, delay = 55;
+  let i = Math.floor(Math.random() * names.length), delay = 55;
   (function tick(){
     label.textContent = names[i++ % names.length];
     delay *= 1.13;
@@ -699,6 +860,7 @@ async function sharePick(id){
 /* ---- face-off mode ---- */
 $('faceoffBtn').onclick = faceoff;
 function faceoff(){
+  if(spinning) return;
   const pool = eligible();
   if(pool.length < 2){ toast('Need at least 2 spots in the pot for a face-off'); return; }
   const a = weightedPick(pool);
@@ -719,6 +881,7 @@ function faceoff(){
   </div>`;
 }
 function chooseFaceoff(id){
+  if(spinning) return;
   const p = places.find(x => x.id === id);
   if(p) reveal(p);
 }
@@ -830,25 +993,62 @@ function delPlace(id){
 
 /* ================= place autocomplete (OpenStreetMap Nominatim) ================= */
 const ISO = {malaysia:'my',indonesia:'id',thailand:'th',singapore:'sg',vietnam:'vn',japan:'jp','south korea':'kr',korea:'kr',china:'cn',taiwan:'tw','hong kong':'hk',india:'in',myanmar:'mm',philippines:'ph',cambodia:'kh',laos:'la',brunei:'bn',turkey:'tr','türkiye':'tr',uae:'ae','saudi arabia':'sa',australia:'au',uk:'gb',usa:'us'};
-let sugT = null, sugAbort = null, pendingGeo = null;
+let sugT = null, sugAbort = null, pendingGeo = null, sheetOrigGeo = null;
+let userGeo = null;
+function primeGeo(){
+  if(userGeo || !navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    p => { userGeo = { lat:p.coords.latitude, lon:p.coords.longitude }; },
+    () => {}, { enableHighAccuracy:false, timeout:6000, maximumAge:600000 }
+  );
+}
 function hideSuggest(){ $('nameSuggest').classList.remove('open'); $('nameSuggest').innerHTML = ''; }
+function dedupe_(list){
+  const seen = new Set(), out = [];
+  for(const r of list){
+    const key = (r.name||r.display_name||'') + '|' + (r.lat||'').slice(0,7);
+    if(r.lat && !seen.has(key)){ seen.add(key); out.push(r); }
+  }
+  return out;
+}
 async function fetchSuggest(q){
   try{
     if(sugAbort) sugAbort.abort();
-    sugAbort = new AbortController();
+    const ctl = new AbortController();
+    sugAbort = ctl;
     const cc = ISO[($('fCountry').value||'').trim().toLowerCase()];
-    const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&extratags=1&accept-language=en&limit=5'
-      + (cc ? '&countrycodes=' + cc : '') + '&q=' + encodeURIComponent(q);
-    const res = await fetch(url, { signal: sugAbort.signal });
-    const data = await res.json();
-    renderSuggest(Array.isArray(data) ? data : []);
+    const base = 'https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&extratags=1&namedetails=1&accept-language=en';
+    // viewbox biases (not restricts) results toward where you are — big quality boost for local spots
+    let vb = '';
+    if(userGeo){
+      const d = 0.35; // ~35km around you
+      vb = '&viewbox=' + (userGeo.lon-d) + ',' + (userGeo.lat-d) + ',' + (userGeo.lon+d) + ',' + (userGeo.lat+d) + '&bounded=0';
+    }
+    const ccp = cc ? '&countrycodes=' + cc : '';
+    // Query 1: free-form (catches most)
+    const u1 = base + '&limit=8' + ccp + vb + '&q=' + encodeURIComponent(q);
+    // Query 2: amenity-biased phrasing to surface eateries specifically
+    const u2 = base + '&limit=6' + ccp + vb + '&q=' + encodeURIComponent(q + ' restaurant');
+    const [r1, r2] = await Promise.all([
+      fetch(u1, { signal: ctl.signal }).then(r => r.json()).catch(() => []),
+      fetch(u2, { signal: ctl.signal }).then(r => r.json()).catch(() => [])
+    ]);
+    if(sugAbort !== ctl) return;   // a newer keystroke superseded this request — discard
+    // rank: prefer food-category POIs, then anything with a name
+    const merged = dedupe_([...(r1||[]), ...(r2||[])]);
+    const foodish = r => {
+      const cat = (r.category||'') + (r.type||'') + JSON.stringify(r.extratags||{});
+      return /food|restaurant|cafe|fast_food|bar|amenity|cuisine/i.test(cat) ? 0 : 1;
+    };
+    merged.sort((a,b) => foodish(a) - foodish(b));
+    renderSuggest(merged.slice(0, 6));
   }catch(e){ /* offline or aborted — manual typing still works */ }
 }
 function renderSuggest(list){
   const box = $('nameSuggest');
   if(!list.length){ hideSuggest(); return; }
   box.innerHTML = list.map((r, i) => {
-    const nm = r.name || (r.display_name||'').split(',')[0];
+    const nm = r.name || (r.namedetails && (r.namedetails['name:en'] || r.namedetails.name)) || (r.display_name||'').split(',')[0];
     const ad = r.address || {};
     const sub2 = [ad.suburb||ad.neighbourhood||ad.quarter||ad.road, ad.city||ad.town||ad.village||ad.state, ad.country]
       .filter(Boolean).join(' · ');
@@ -875,7 +1075,10 @@ $('fName').oninput = () => {
   pendingGeo = null;
   clearTimeout(sugT);
   const q = $('fName').value.trim();
-  if(q.length < 3){ hideSuggest(); return; }
+  if(q.length < 3){
+    if(sugAbort){ sugAbort.abort(); sugAbort = null; }
+    hideSuggest(); return;
+  }
   sugT = setTimeout(() => fetchSuggest(q), 450);
 };
 
@@ -899,12 +1102,14 @@ function openSheet(id){
   fByV = p?.addedBy || cfg.you;
   fStarV = p?.starred || false;
   pendingGeo = (p && p.lat != null && p.lon != null) ? { lat:p.lat, lon:p.lon } : null;
+  sheetOrigGeo = pendingGeo;   // remembered so a typo-fix in the name doesn't destroy the pin
   hideSuggest();
   $('cuisineList').innerHTML = [...new Set(live().map(x => x.cuisine).filter(Boolean))]
     .map(c => `<option value="${esc(c)}">`).join('');
   $('countryList').innerHTML = [...new Set([...live().map(x => x.country).filter(Boolean), 'Malaysia','Indonesia','Thailand','Singapore'])]
     .map(c => `<option value="${esc(c)}">`).join('');
   renderSheetChips();
+  primeGeo();
   lockBody();
   $('sheetBg').classList.add('open');
   setTimeout(() => $('fName').focus(), 250);
@@ -928,10 +1133,12 @@ $('saveBtn').onclick = () => {
   let link = $('fLink').value.trim();
   if(link && !/^https?:\/\//i.test(link)) link = 'https://' + link;
   const country = $('fCountry').value.trim();
+  // keep the original pin when editing, unless a new suggestion was explicitly picked
+  const geo = pendingGeo || (editingId ? sheetOrigGeo : null);
   const data = {
     name, cuisine:$('fCuisine').value.trim(), area:$('fArea').value.trim(), country,
     link, notes:$('fNotes').value.trim(), price:fPriceV, addedBy:fByV, starred:fStarV,
-    lat: pendingGeo ? pendingGeo.lat : null, lon: pendingGeo ? pendingGeo.lon : null,
+    lat: geo ? geo.lat : null, lon: geo ? geo.lon : null,
     updatedAt:Date.now()
   };
   if(country) store.set('ml_lastCountry', country);
@@ -960,6 +1167,7 @@ function renderMore(){
   $('nameYou').value = cfg.you;
   $('namePartner').value = cfg.partner;
   $('syncUrl').value = cfg.syncUrl;
+  $('syncToken').value = cfg.syncToken;
 }
 $('hvToggle').onclick = () => { cfg.hideVisited = !cfg.hideVisited; persist(false); renderMore(); renderSpin(); };
 $('navApps').querySelectorAll('.chip').forEach(ch => ch.onclick = () => {
@@ -968,6 +1176,12 @@ $('navApps').querySelectorAll('.chip').forEach(ch => ch.onclick = () => {
 $('nameYou').onchange = e => { cfg.you = e.target.value.trim() || 'Me'; persist(false); };
 $('namePartner').onchange = e => { cfg.partner = e.target.value.trim() || 'Partner'; persist(false); };
 $('syncUrl').onchange = e => { cfg.syncUrl = e.target.value.trim(); persist(false); setSyncDot(''); };
+$('syncToken').onchange = e => { cfg.syncToken = e.target.value.trim(); persist(false); setSyncDot(''); };
+$('tokEye').onclick = () => {
+  const f = $('syncToken'), show = f.type === 'password';
+  f.type = show ? 'text' : 'password';
+  $('tokEye').classList.toggle('on', show);
+};
 
 /* ---- share link ---- */
 const b64e = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -999,6 +1213,10 @@ function checkHashImport(){
     const incoming = JSON.parse(b64d(m[1]));
     history.replaceState(null, '', location.pathname);
     if(!Array.isArray(incoming)) throw 0;
+    const n = incoming.filter(x => x && x.id && !x.deleted).length;
+    if(!confirm('This link wants to add/update ' + n + ' spots in your MakanLah list. Import them?')){
+      toast('Import cancelled'); return;
+    }
     const r = merge(incoming);
     persist();
     toast(`Merged in ${r.added} new, ${r.updated} updated 🍱`);
@@ -1008,13 +1226,18 @@ function checkHashImport(){
 
 /* ---- auto-sync via Apps Script ---- */
 function setSyncDot(state){ $('syncDot').className = 'sync-dot ' + state; }
+function syncEndpoint(){
+  if(!cfg.syncUrl) return '';
+  if(!cfg.syncToken) return cfg.syncUrl;
+  return cfg.syncUrl + (cfg.syncUrl.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(cfg.syncToken);
+}
 let pushT;
 function syncPush(){
   if(!cfg.syncUrl) return;
   clearTimeout(pushT);
   pushT = setTimeout(async () => {
     try{
-      await fetch(cfg.syncUrl, { method:'POST', body: JSON.stringify(places) });
+      await fetch(syncEndpoint(), { method:'POST', body: JSON.stringify(places) });
       setSyncDot('ok');
     }catch(e){ setSyncDot('err'); }
   }, 1200);
@@ -1022,18 +1245,22 @@ function syncPush(){
 async function syncPull(silent){
   if(!cfg.syncUrl){ if(!silent) toast('Paste your Web app URL first'); return; }
   try{
-    const res = await fetch(cfg.syncUrl);
+    const res = await fetch(syncEndpoint());
     const incoming = await res.json();
+    if(incoming && incoming.error === 'unauthorized'){ setSyncDot('err'); if(!silent) toast('Sync token rejected — check it matches the script'); return; }
     if(Array.isArray(incoming)){
       const r = merge(incoming);
       if(r.added || r.updated){ persist(false); renderSpin(); renderPlaces(); }
       setSyncDot('ok');
       if(!silent) toast(`Synced ✓ ${r.added} new, ${r.updated} updated`);
-      await fetch(cfg.syncUrl, { method:'POST', body: JSON.stringify(places) });
+      await fetch(syncEndpoint(), { method:'POST', body: JSON.stringify(places) });
     }
   }catch(e){ setSyncDot('err'); if(!silent) toast('Sync failed — check the URL'); }
 }
 $('syncNow').onclick = () => syncPull(false);
+$('pinBtn').onclick = submitPin;
+$('pinReset').onclick = startPinReset;
+$('pinInput').addEventListener('keydown', e => { if(e.key === 'Enter') submitPin(); });
 
 /* ---- backup / restore ---- */
 $('exportBtn').onclick = async () => {
