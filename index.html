@@ -198,12 +198,14 @@ nav button.on{color:var(--green)}
 .sheet-bg{
   position:fixed; inset:0; background:rgba(20,17,14,.45); z-index:40;
   display:none; align-items:flex-end; justify-content:center;
+  touch-action:none; overscroll-behavior:contain;
 }
 .sheet-bg.open{display:flex; animation:fadein .18s ease}
 .sheet{
   background:var(--porcelain); width:100%; max-width:560px;
   border-radius:22px 22px 0 0; padding:20px 20px calc(20px + var(--safe-b));
   max-height:88vh; overflow-y:auto;
+  overscroll-behavior:contain; -webkit-overflow-scrolling:touch; touch-action:pan-y;
   animation:slideup .26s cubic-bezier(.32,.9,.4,1);
 }
 @keyframes slideup{from{transform:translateY(60px); opacity:.4}to{transform:none; opacity:1}}
@@ -241,6 +243,20 @@ ol.steps{font-size:13.5px; color:var(--ink-soft); line-height:1.65; padding-left
 .sync-dot{display:inline-block; width:8px; height:8px; border-radius:50%; background:#C9C2B8; margin-right:6px}
 .sync-dot.ok{background:var(--green)}
 .sync-dot.err{background:var(--red)}
+
+/* ---------- Place suggestions ---------- */
+.suggest-wrap{position:relative}
+.suggest{
+  position:absolute; top:100%; left:0; right:0; margin-top:4px; z-index:6;
+  background:var(--white); border:1.5px solid var(--line); border-radius:12px;
+  overflow:hidden; box-shadow:0 12px 28px rgba(46,57,71,.16); display:none;
+}
+.suggest.open{display:block}
+.suggest button{display:block; width:100%; text-align:left; padding:10px 13px; border-bottom:1px solid var(--line)}
+.suggest button:active{background:var(--turmeric-soft)}
+.suggest .s-name{font-weight:700; font-size:14px}
+.suggest .s-sub{font-size:12px; color:var(--ink-soft); margin-top:1px}
+.suggest .s-foot{font-size:10.5px; color:var(--ink-soft); padding:6px 13px; background:var(--porcelain)}
 
 /* ---------- Toast ---------- */
 #toast{
@@ -395,7 +411,10 @@ function doPost(e) {
 <div class="sheet-bg" id="sheetBg">
   <div class="sheet">
     <h2 id="sheetTitle">Add a spot</h2>
-    <div class="field"><label>Name *</label><input id="fName" placeholder="Nasi Lemak Wanjo"></div>
+    <div class="field"><label>Name *</label><div class="suggest-wrap">
+      <input id="fName" placeholder="Nasi Lemak Wanjo" autocomplete="off">
+      <div class="suggest" id="nameSuggest"></div>
+    </div></div>
     <div class="field"><label>Cuisine</label><input id="fCuisine" list="cuisineList" placeholder="Malay, Thai, Japanese…"><datalist id="cuisineList"></datalist></div>
     <div class="field"><label>Country</label><input id="fCountry" list="countryList" placeholder="Malaysia"><datalist id="countryList"></datalist></div>
     <div class="field"><label>Area</label><input id="fArea" placeholder="Kampung Baru, KL"></div>
@@ -472,6 +491,23 @@ let toastT;
 function toast(msg){
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ================= body scroll lock (iOS scroll-chaining fix) ================= */
+let bodyLockY = 0, bodyLocks = 0;
+function lockBody(){
+  if(++bodyLocks > 1) return;
+  bodyLockY = window.scrollY || document.documentElement.scrollTop || 0;
+  const b = document.body.style;
+  b.position = 'fixed'; b.top = (-bodyLockY) + 'px';
+  b.left = '0'; b.right = '0'; b.width = '100%';
+}
+function unlockBody(){
+  if(bodyLocks === 0) return;
+  if(--bodyLocks > 0) return;
+  const b = document.body.style;
+  b.position = ''; b.top = ''; b.left = ''; b.right = ''; b.width = '';
+  window.scrollTo(0, bodyLockY);
 }
 
 /* ================= navigation ================= */
@@ -613,6 +649,11 @@ function timeEyebrow(){
   return '🥢 Tonight you eat at';
 }
 function navUrl(p){
+  if(p.lat != null && p.lon != null){
+    if(cfg.navApp === 'google') return 'https://www.google.com/maps/search/?api=1&query=' + p.lat + '%2C' + p.lon;
+    if(cfg.navApp === 'waze')   return 'https://waze.com/ul?ll=' + p.lat + ',' + p.lon + '&navigate=yes';
+    return 'https://maps.apple.com/?ll=' + p.lat + ',' + p.lon + '&q=' + encodeURIComponent(p.name || 'Makan spot');
+  }
   const q = encodeURIComponent([p.name, p.area, p.country].filter(Boolean).join(' '));
   if(cfg.navApp === 'google') return 'https://www.google.com/maps/search/?api=1&query=' + q;
   if(cfg.navApp === 'waze')   return 'https://waze.com/ul?q=' + q + '&navigate=yes';
@@ -701,6 +742,7 @@ function openDiary(id){
   dRating = p.diary?.rating || 0;
   renderStars();
   $('dVerdict').value = p.diary?.verdict || '';
+  lockBody();
   $('diaryBg').classList.add('open');
 }
 function renderStars(){
@@ -708,7 +750,7 @@ function renderStars(){
     `<button class="star ${n<=dRating?'on':''}" data-n="${n}">★</button>`).join('');
   $('dStars').querySelectorAll('.star').forEach(b => b.onclick = () => { dRating = +b.dataset.n; renderStars(); });
 }
-function closeDiary(){ $('diaryBg').classList.remove('open'); diaryId = null; }
+function closeDiary(){ $('diaryBg').classList.remove('open'); unlockBody(); diaryId = null; }
 $('dSkip').onclick = closeDiary;
 $('diaryBg').onclick = e => { if(e.target === $('diaryBg')) closeDiary(); };
 $('dSave').onclick = () => {
@@ -786,6 +828,57 @@ function delPlace(id){
   persist(); renderPlaces(); toast('Deleted');
 }
 
+/* ================= place autocomplete (OpenStreetMap Nominatim) ================= */
+const ISO = {malaysia:'my',indonesia:'id',thailand:'th',singapore:'sg',vietnam:'vn',japan:'jp','south korea':'kr',korea:'kr',china:'cn',taiwan:'tw','hong kong':'hk',india:'in',myanmar:'mm',philippines:'ph',cambodia:'kh',laos:'la',brunei:'bn',turkey:'tr','türkiye':'tr',uae:'ae','saudi arabia':'sa',australia:'au',uk:'gb',usa:'us'};
+let sugT = null, sugAbort = null, pendingGeo = null;
+function hideSuggest(){ $('nameSuggest').classList.remove('open'); $('nameSuggest').innerHTML = ''; }
+async function fetchSuggest(q){
+  try{
+    if(sugAbort) sugAbort.abort();
+    sugAbort = new AbortController();
+    const cc = ISO[($('fCountry').value||'').trim().toLowerCase()];
+    const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&extratags=1&accept-language=en&limit=5'
+      + (cc ? '&countrycodes=' + cc : '') + '&q=' + encodeURIComponent(q);
+    const res = await fetch(url, { signal: sugAbort.signal });
+    const data = await res.json();
+    renderSuggest(Array.isArray(data) ? data : []);
+  }catch(e){ /* offline or aborted — manual typing still works */ }
+}
+function renderSuggest(list){
+  const box = $('nameSuggest');
+  if(!list.length){ hideSuggest(); return; }
+  box.innerHTML = list.map((r, i) => {
+    const nm = r.name || (r.display_name||'').split(',')[0];
+    const ad = r.address || {};
+    const sub2 = [ad.suburb||ad.neighbourhood||ad.quarter||ad.road, ad.city||ad.town||ad.village||ad.state, ad.country]
+      .filter(Boolean).join(' · ');
+    return `<button type="button" data-i="${i}"><div class="s-name">${esc(nm)}</div><div class="s-sub">${esc(sub2)}</div></button>`;
+  }).join('') + '<div class="s-foot">Suggestions © OpenStreetMap contributors</div>';
+  box.classList.add('open');
+  box.querySelectorAll('button').forEach(b => b.onclick = () => pickSuggest(list[+b.dataset.i]));
+}
+function pickSuggest(r){
+  const ad = r.address || {}, ex = r.extratags || {};
+  $('fName').value = r.name || (r.display_name||'').split(',')[0];
+  const area = [ad.suburb||ad.neighbourhood||ad.quarter||ad.road, ad.city||ad.town||ad.village||ad.state]
+    .filter(Boolean).join(', ');
+  if(area) $('fArea').value = area;
+  if(ad.country) $('fCountry').value = ad.country;
+  if(ex.cuisine && !$('fCuisine').value.trim()){
+    $('fCuisine').value = ex.cuisine.split(';')[0].replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+  pendingGeo = { lat: parseFloat(r.lat), lon: parseFloat(r.lon) };
+  hideSuggest();
+  toast('Details filled in 📍');
+}
+$('fName').oninput = () => {
+  pendingGeo = null;
+  clearTimeout(sugT);
+  const q = $('fName').value.trim();
+  if(q.length < 3){ hideSuggest(); return; }
+  sugT = setTimeout(() => fetchSuggest(q), 450);
+};
+
 /* ================= add / edit sheet ================= */
 let fPriceV = '', fByV = '', fStarV = false;
 $('addBtn').onclick = () => openSheet(null);
@@ -805,11 +898,14 @@ function openSheet(id){
   fPriceV = p?.price || '';
   fByV = p?.addedBy || cfg.you;
   fStarV = p?.starred || false;
+  pendingGeo = (p && p.lat != null && p.lon != null) ? { lat:p.lat, lon:p.lon } : null;
+  hideSuggest();
   $('cuisineList').innerHTML = [...new Set(live().map(x => x.cuisine).filter(Boolean))]
     .map(c => `<option value="${esc(c)}">`).join('');
   $('countryList').innerHTML = [...new Set([...live().map(x => x.country).filter(Boolean), 'Malaysia','Indonesia','Thailand','Singapore'])]
     .map(c => `<option value="${esc(c)}">`).join('');
   renderSheetChips();
+  lockBody();
   $('sheetBg').classList.add('open');
   setTimeout(() => $('fName').focus(), 250);
 }
@@ -824,7 +920,7 @@ function renderSheetChips(){
     `<button class="chip ${fByV===n?'on':''}" data-n="${esc(n)}">${esc(n)}</button>`).join('');
   $('fBy').querySelectorAll('.chip').forEach(ch => ch.onclick = () => { fByV = ch.dataset.n; renderSheetChips(); });
 }
-function closeSheet(){ $('sheetBg').classList.remove('open'); editingId = null; }
+function closeSheet(){ $('sheetBg').classList.remove('open'); unlockBody(); editingId = null; hideSuggest(); }
 
 $('saveBtn').onclick = () => {
   const name = $('fName').value.trim();
@@ -834,7 +930,9 @@ $('saveBtn').onclick = () => {
   const country = $('fCountry').value.trim();
   const data = {
     name, cuisine:$('fCuisine').value.trim(), area:$('fArea').value.trim(), country,
-    link, notes:$('fNotes').value.trim(), price:fPriceV, addedBy:fByV, starred:fStarV, updatedAt:Date.now()
+    link, notes:$('fNotes').value.trim(), price:fPriceV, addedBy:fByV, starred:fStarV,
+    lat: pendingGeo ? pendingGeo.lat : null, lon: pendingGeo ? pendingGeo.lon : null,
+    updatedAt:Date.now()
   };
   if(country) store.set('ml_lastCountry', country);
   if(editingId){
@@ -1002,10 +1100,11 @@ $('wrapBtn').onclick = () => {
       (best ? `\n🏆 Best: ${best.name} (${best.diary.rating}★)` : '') +
       `\n👀 Spot battle: ${cfg.you} ${you}–${pr} ${cfg.partner}`;
   }
+  lockBody();
   $('wrapBg').classList.add('open');
 };
-$('wrapClose').onclick = () => $('wrapBg').classList.remove('open');
-$('wrapBg').onclick = e => { if(e.target === $('wrapBg')) $('wrapBg').classList.remove('open'); };
+$('wrapClose').onclick = () => { $('wrapBg').classList.remove('open'); unlockBody(); };
+$('wrapBg').onclick = e => { if(e.target === $('wrapBg')){ $('wrapBg').classList.remove('open'); unlockBody(); } };
 $('wrapCopy').onclick = async () => {
   if(!wrapText){ toast('Nothing to share yet'); return; }
   if(navigator.share){ try{ await navigator.share({ text: wrapText }); return; }catch(e){ if(e.name === 'AbortError') return; } }
