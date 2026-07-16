@@ -545,6 +545,9 @@ if(!cfg.navApp) cfg.navApp = 'apple';
 if(cfg.syncToken === undefined) cfg.syncToken = '';
 if(cfg.morePinHash === undefined) cfg.morePinHash = '';   // '' = no PIN set yet
 let moreUnlocked = false;   // resets to false every fresh app launch
+let moreLastSeen = 0;       // when the user was last on the (unlocked) More tab
+let currentScreen = 'spin';
+const MORE_LOCK_MS = 10 * 60 * 1000;   // re-lock after 10 minutes away
 let spinFilter = { cuisines:new Set(), country:store.get('ml_country',''), prices:new Set(), q:'' };
 let lastPickId = null, editingId = null, spinning = false;
 
@@ -637,10 +640,10 @@ async function submitPin(){
   if(pin.length < 4){ $('lockErr').textContent = 'Use at least 4 digits'; return; }
   const hash = await hashPin(pin);
   if(!cfg.morePinHash){
-    cfg.morePinHash = hash; persist(false); moreUnlocked = true;
+    cfg.morePinHash = hash; persist(false); moreUnlocked = true; moreLastSeen = Date.now();
     showMoreGate(); renderMore(); toast('PIN set 🔒');
   } else if(hash === cfg.morePinHash){
-    moreUnlocked = true; showMoreGate(); renderMore();
+    moreUnlocked = true; moreLastSeen = Date.now(); showMoreGate(); renderMore();
   } else {
     $('lockErr').textContent = 'Wrong PIN'; $('pinInput').value = '';
   }
@@ -668,6 +671,11 @@ document.querySelectorAll('nav button[data-scr]').forEach(b => {
   b.onclick = () => showScreen(b.dataset.scr);
 });
 function showScreen(name){
+  if(currentScreen === 'more' && name !== 'more') moreLastSeen = Date.now();
+  if(name === 'more' && moreUnlocked && moreLastSeen && (Date.now() - moreLastSeen > MORE_LOCK_MS)){
+    moreUnlocked = false;   // been away over 10 minutes — require the PIN again
+  }
+  currentScreen = name;
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   $('scr-' + name).classList.add('active');
   document.querySelectorAll('nav button[data-scr]').forEach(b =>
@@ -1348,6 +1356,14 @@ renderSpin();
 if(cfg.syncUrl) syncPull(true);
 setInterval(() => { if(cfg.syncUrl && !document.hidden) syncPull(true); }, 30000);
 document.addEventListener('visibilitychange', () => { if(!document.hidden && cfg.syncUrl) syncPull(true); });
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden){
+    if(currentScreen === 'more') moreLastSeen = Date.now();
+  } else if(currentScreen === 'more' && moreUnlocked && moreLastSeen && (Date.now() - moreLastSeen > MORE_LOCK_MS)){
+    moreUnlocked = false;
+    showMoreGate();   // re-lock in place if they come back to a stale More screen
+  }
+});
 window.addEventListener('pageshow', () => { if(cfg.syncUrl) syncPull(true); });
 </script>
 </body>
