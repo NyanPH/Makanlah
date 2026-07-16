@@ -50,7 +50,16 @@ header{
   position:sticky; top:0; z-index:20;
   border-bottom:1px solid var(--line);
 }
+header{position:sticky}
+header .row1{display:flex; align-items:flex-start; justify-content:space-between; gap:10px}
 header .brand{font-family:var(--display); font-weight:800; font-size:25px; letter-spacing:-.4px; line-height:1.05; color:var(--ink)}
+.ver-badge{
+  flex:0 0 auto; margin-top:2px;
+  font-size:11px; font-weight:800; letter-spacing:.3px;
+  color:var(--red); background:var(--turmeric-soft);
+  border:1.5px solid var(--red-glow); border-radius:999px;
+  padding:3px 9px; line-height:1.2;
+}
 header .brand .bang{color:var(--red)}
 header .tag{font-size:12.5px; color:var(--ink-soft); margin-top:2px; font-weight:600}
 
@@ -318,7 +327,10 @@ input,textarea{color:var(--ink)}
 </head>
 <body>
 <header>
-  <div class="brand">MakanLah<span class="bang">!</span></div>
+  <div class="row1">
+    <div class="brand">MakanLah<span class="bang">!</span></div>
+    <div class="ver-badge" id="verBadge">V23</div>
+  </div>
   <div class="tag">Your saved food spots · one tap decides</div>
 </header>
 
@@ -1345,6 +1357,10 @@ $('wrapCopy').onclick = async () => {
   if(navigator.share){ try{ await navigator.share({ text: wrapText }); return; }catch(e){ if(e.name === 'AbortError') return; } }
   toast(await copyText(wrapText) ? 'Copied!' : 'Could not copy');
 };
+
+/* ================= version ================= */
+const APP_VERSION = 'V23';
+(function(){ const b = document.getElementById('verBadge'); if(b) b.textContent = APP_VERSION; })();
 
 /* ================= boot ================= */
 $('craveBox').oninput = e => {
